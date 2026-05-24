@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local planning / reference material — not part of the app
+/phase-3-verify/
+/plans/
+SPEC.md

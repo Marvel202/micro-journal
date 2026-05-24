@@ -1,0 +1,13 @@
+{
+  "name": "Micro-Journal Canvas",
+  "short_name": "Micro-Journal",
+  "description": "One sentence or one photo a day.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F4EF",
+  "theme_color": "#F7F4EF",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

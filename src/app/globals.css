@@ -1,26 +1,150 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bone: #F7F4EF;
+  --paper: #FDFBF5;
+  --ink: #1C1A17;
+  --persimmon: #E8581F;
+  --sage: #9AA896;
+  --clay: #D6B89E;
+  --sage-rule: rgba(154, 168, 150, 0.45);
+  --ink-soft: rgba(28, 26, 23, 0.06);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bone: var(--bone);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-persimmon: var(--persimmon);
+  --color-sage: var(--sage);
+  --color-clay: var(--clay);
+  --font-hand: var(--font-hand), "Bradley Hand", "Marker Felt", cursive;
+  --font-serif: var(--font-serif), "Iowan Old Style", Georgia, serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html, body {
+  background: var(--bone);
+  color: var(--ink);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Arial, sans-serif;
+}
+
+/* ── Polaroid signature elements ─────────────────────────────────── */
+
+.pol-hand { font-family: var(--font-hand), "Bradley Hand", cursive; }
+.pol-serif { font-family: var(--font-serif), Georgia, serif; }
+
+.pol-brand::after { content: " ·"; color: var(--persimmon); }
+
+/* Sage washi-tape on top of cards */
+.pol-tape { position: relative; }
+.pol-tape::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-2deg);
+  width: 84px;
+  height: 18px;
+  background: var(--sage);
+  opacity: 0.55;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.pol-tape-left::before {
+  left: 22px;
+  transform: rotate(-3deg);
+  width: 70px;
+}
+
+/* Persimmon "today" stamp */
+.pol-stamp {
+  display: inline-block;
+  font-family: var(--font-hand), "Marker Felt", cursive;
+  color: var(--persimmon);
+  border: 2px solid var(--persimmon);
+  padding: 2px 10px;
+  transform: rotate(-6deg);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  opacity: 0.92;
+}
+
+/* Slight card tilts */
+.pol-tilt-l { transform: rotate(-1.6deg); }
+.pol-tilt-r { transform: rotate(1.4deg); }
+
+/* Card surfaces */
+.pol-card {
+  background: var(--paper);
+  border-radius: 6px;
+  border: 1px solid var(--ink-soft);
+  box-shadow: 0 12px 28px rgba(28, 26, 23, 0.10), 0 2px 4px rgba(28, 26, 23, 0.06);
+}
+
+.pol-prompt-strip {
+  background: rgba(214, 184, 158, 0.22);
+  border: 1px solid rgba(214, 184, 158, 0.4);
+  border-radius: 10px;
+  font-family: var(--font-hand), cursive;
+}
+
+/* Dashed sage rule (used for type specimen / dividers) */
+.pol-dashed { border-bottom: 1px dashed var(--sage-rule); }
+
+/* Sage pill button (for header chips like history/streak) */
+.pol-chip {
+  background: rgba(154, 168, 150, 0.18);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+.pol-chip:hover { background: rgba(154, 168, 150, 0.3); }
+
+/* Buttons */
+.pol-btn {
+  padding: 14px 16px;
+  border-radius: 14px;
+  font-size: 15px;
+  text-align: center;
+  box-shadow: 0 3px 0 rgba(28, 26, 23, 0.08);
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  border: 0;
+  transition: transform 0.08s ease;
+}
+.pol-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 rgba(28, 26, 23, 0.08); }
+.pol-btn:disabled { opacity: 0.55; cursor: progress; }
+.pol-btn-primary { background: var(--ink); color: var(--bone); }
+.pol-btn-secondary { background: var(--paper); color: var(--ink); border: 1px solid var(--sage-rule); }
+.pol-btn-persimmon { background: var(--persimmon); color: var(--bone); }
+
+/* Section eyebrow */
+.pol-eyebrow {
+  font-family: var(--font-hand), "Marker Felt", cursive;
+  font-size: 13px;
+  color: var(--persimmon);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Sage meta (small caps) */
+.pol-meta {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sage);
+}
+
+/* Photo gradient placeholder (used while photo Blob URL is loading) */
+.pol-photo-placeholder {
+  background: linear-gradient(135deg, var(--clay) 0%, var(--sage) 60%, var(--ink) 100%);
 }

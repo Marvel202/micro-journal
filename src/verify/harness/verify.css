@@ -1,0 +1,83 @@
+/* Verification harness styles — scoped under .verify-root to avoid leaking
+   into the rest of the (Tailwind) app. All rules use class selectors only. */
+
+.verify-root {
+  --vr-bg: #fafaf9;
+  --vr-ink: #1a1a1a;
+  --vr-muted: #6a6a6a;
+  --vr-rule: #e3e0d8;
+  --vr-accent: #2a44c8;
+  --vr-pass: #1a8a4a;
+  --vr-fail: #c33;
+  --vr-warn: #c87a00;
+  --vr-probe: #7a4ec8;
+  --vr-blocked: #a06030;
+
+  background: var(--vr-bg);
+  color: var(--vr-ink);
+  font: 14.5px/1.55 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Arial, sans-serif;
+  min-height: 100vh;
+}
+
+.verify-root a { color: var(--vr-accent); text-decoration: none; }
+.verify-root a:hover { text-decoration: underline; }
+.verify-root code, .verify-root pre { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.verify-root pre { background: #0e0e0e; color: #c8e0c8; padding: 10px 14px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; margin: 6px 0 0; }
+.verify-root button { font: inherit; cursor: pointer; }
+
+.verify-root .dashboard { max-width: 1100px; margin: 0 auto; padding: 32px 24px 80px; display: grid; gap: 22px; }
+.verify-root .dashboard-head { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid var(--vr-rule); padding-bottom: 14px; }
+.verify-root .dashboard-head h1 { margin: 0; font-size: 26px; letter-spacing: -0.01em; }
+.verify-root .dashboard-sub { color: var(--vr-muted); margin: 4px 0 0; font-size: 13px; }
+.verify-root .dashboard-actions { display: flex; gap: 14px; align-items: center; }
+.verify-root .run-all { background: var(--vr-ink); color: white; border: 0; border-radius: 8px; padding: 10px 16px; font-weight: 600; }
+.verify-root .run-all:disabled { opacity: 0.6; cursor: progress; }
+.verify-root .dashboard-summary { display: flex; gap: 18px; align-items: center; background: white; border: 1px solid var(--vr-rule); border-radius: 10px; padding: 12px 16px; font-size: 13px; }
+.verify-root .dashboard-summary strong { color: var(--vr-ink); margin-right: 4px; }
+.verify-root .filter-toggle { margin-left: auto; display: flex; gap: 4px; align-items: center; color: var(--vr-muted); }
+.verify-root .filter-toggle button { background: transparent; border: 1px solid transparent; padding: 4px 10px; border-radius: 6px; color: var(--vr-muted); }
+.verify-root .filter-toggle button.is-on { background: var(--vr-ink); color: white; }
+.verify-root .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.verify-root .unit-card { background: white; border: 1px solid var(--vr-rule); border-radius: 10px; padding: 16px 18px; }
+.verify-root .unit-card h2 { margin: 0; font-size: 18px; }
+.verify-root .unit-desc { color: var(--vr-muted); font-size: 12.5px; margin: 4px 0 2px; }
+.verify-root .unit-invariants { color: var(--vr-muted); font-size: 11.5px; margin: 6px 0 12px; font-family: ui-monospace, Menlo, monospace; }
+.verify-root .fixture-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.verify-root .fixture-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.verify-root .fixture-link { flex: 1; }
+.verify-root .probe-tag, .verify-root .expected-tag { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; }
+.verify-root .probe-tag { background: rgba(122,78,200,.12); color: var(--vr-probe); }
+.verify-root .expected-tag { background: rgba(200,122,0,.12); color: var(--vr-warn); }
+.verify-root .verdict { font-size: 11px; letter-spacing: 0.08em; padding: 2px 8px; border-radius: 4px; font-weight: 700; }
+.verify-root .verdict-pass { background: rgba(26,138,74,.12); color: var(--vr-pass); }
+.verify-root .verdict-fail { background: rgba(204,51,51,.12); color: var(--vr-fail); }
+.verify-root .verdict-blocked { background: rgba(160,96,48,.12); color: var(--vr-blocked); }
+.verify-root .verdict-skip { background: rgba(106,106,106,.12); color: var(--vr-muted); }
+.verify-root .verdict-pending { background: transparent; color: var(--vr-muted); font-weight: 400; }
+.verify-root .verdict-mismatch { color: var(--vr-warn); }
+.verify-root .dashboard-results { display: grid; gap: 14px; }
+.verify-root .result-row { background: white; border: 1px solid var(--vr-rule); border-radius: 10px; padding: 12px 16px; }
+.verify-root .result-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 14px; }
+.verify-root .result-fixture { color: var(--vr-muted); }
+.verify-root .result-duration { color: var(--vr-muted); font-size: 12px; margin-left: auto; }
+.verify-root .checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; font-size: 12.5px; }
+.verify-root .check { display: flex; align-items: baseline; gap: 8px; padding: 2px 0; font-family: ui-monospace, Menlo, monospace; }
+.verify-root .check-verifier { color: var(--vr-accent); }
+.verify-root .check-name { color: var(--vr-ink); }
+.verify-root .check-message { color: var(--vr-muted); }
+.verify-root .check-fail { color: var(--vr-fail); }
+.verify-root .check-warn { color: var(--vr-warn); }
+.verify-root .check-probe { color: var(--vr-probe); }
+.verify-root .dashboard-foot { color: var(--vr-muted); font-size: 13px; padding-top: 24px; border-top: 1px solid var(--vr-rule); }
+.verify-root .dashboard-foot pre { margin-top: 8px; }
+
+.verify-root .unit-page { max-width: 920px; margin: 0 auto; padding: 24px; display: grid; gap: 18px; }
+.verify-root .unit-page.no-chrome { padding: 0; }
+.verify-root .unit-page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.verify-root .unit-page-head h1 { margin: 6px 0 0; font-size: 20px; }
+.verify-root .unit-page-head h1 code { background: rgba(0,0,0,.05); padding: 1px 6px; border-radius: 4px; font-size: 16px; }
+.verify-root .unit-page-head .probe-tag { margin-left: 8px; vertical-align: middle; }
+.verify-root .unit-page-meta { font-size: 12px; color: var(--vr-muted); }
+.verify-root .unit-mount { background: white; border: 1px solid var(--vr-rule); border-radius: 10px; padding: 18px; }
+.verify-root .no-chrome .unit-mount { border: 0; padding: 0; border-radius: 0; }
+.verify-root .unit-page-error { color: var(--vr-fail); padding: 16px; }

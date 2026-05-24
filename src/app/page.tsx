@@ -1,65 +1,130 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { dayKey, promptForDate } from "../lib/prompts";
+import { getEntry, listEntries, type Entry } from "../lib/storage";
+import { computeStreak } from "../lib/streak";
+import Composer from "../components/Composer";
+import EntryCard from "../components/EntryCard";
+import dynamic from "next/dynamic";
+
+// Client-only (uses localStorage + GIS script)
+const DriveSyncButton = dynamic(() => import("../components/DriveSyncButton"), {
+  ssr: false,
+});
 
 export default function Home() {
+  const [today, setToday] = useState<string>("");
+  const [prompt, setPrompt] = useState<string>("");
+  const [todays, setTodays] = useState<Entry | null>(null);
+  const [history, setHistory] = useState<Entry[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  useEffect(() => {
+    const now = new Date();
+    const k = dayKey(now);
+    setToday(k);
+    setPrompt(promptForDate(now));
+    (async () => {
+      try {
+        const e = await getEntry(k);
+        setTodays(e ?? null);
+        const all = await listEntries();
+        setHistory(all);
+      } catch (err) {
+        console.error("Failed to load entries from IndexedDB:", err);
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, []);
+
+  const streak = computeStreak(history.map((e) => e.day), today);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <main className="mx-auto w-full max-w-md px-5 pt-10 pb-16 flex flex-col gap-7 min-h-screen">
+      <header className="flex items-baseline justify-between">
+        <Link href="/" className="pol-hand pol-brand text-2xl text-ink no-underline">
+          micro-journal
+        </Link>
+        <nav className="flex items-baseline gap-2">
+          <Link href="/streak" className="pol-chip">
+            🔥 {streak}-day
+          </Link>
+          <DriveSyncButton />
+          <button
+            onClick={() => setShowHistory((s) => !s)}
+            className="pol-chip"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            {showHistory ? "today" : `stack · ${history.length}`}
+          </button>
+        </nav>
+      </header>
+
+      {!loaded ? (
+        <p className="pol-hand text-[color:var(--sage)] text-lg">loading…</p>
+      ) : showHistory ? (
+        <HistoryStack entries={history} />
+      ) : (
+        <section className="flex flex-col gap-6">
+          <p className="pol-meta text-center">{formatHeader(today)}</p>
+
+          {todays ? (
+            <div className="flex flex-col gap-3">
+              <EntryCard entry={todays} big stamped tilt="left" />
+            </div>
+          ) : (
+            <Composer
+              day={today}
+              prompt={prompt}
+              onSaved={(e) => {
+                setTodays(e);
+                setHistory((h) => [e, ...h.filter((x) => x.day !== e.day)]);
+              }}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+          )}
+        </section>
+      )}
+
+      <footer className="mt-auto pt-8 text-center pol-hand text-[color:var(--sage)] text-base">
+        {"● one sentence or one photo. that’s the day."}
+      </footer>
+    </main>
   );
+}
+
+function HistoryStack({ entries }: { entries: Entry[] }) {
+  if (entries.length === 0) {
+    return (
+      <section className="flex flex-col gap-3">
+        <h2 className="pol-hand text-3xl text-ink">the stack <span className="pol-hand text-[color:var(--sage)] text-base">— empty</span></h2>
+        <p className="pol-serif italic text-[color:var(--sage)]">No cards yet. Write your first one today.</p>
+      </section>
+    );
+  }
+  return (
+    <section className="flex flex-col gap-7">
+      <h2 className="pol-hand text-3xl text-ink">
+        the stack <span className="pol-hand text-[color:var(--sage)] text-base">— {entries.length} day{entries.length === 1 ? "" : "s"}</span>
+      </h2>
+      <div className="flex flex-col gap-7">
+        {entries.map((e, i) => (
+          <EntryCard
+            key={e.day}
+            entry={e}
+            tilt={i % 2 === 0 ? "left" : "right"}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function formatHeader(iso: string): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }).replace(",", " ·");
 }
