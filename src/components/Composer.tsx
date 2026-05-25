@@ -37,6 +37,7 @@ export default function Composer({ day, prompt, onSaved }: Props) {
 
   async function handleSubmit() {
     setError(null);
+
     if (mode === "text") {
       const check = validateSentence(text);
       if (!check.ok) {
@@ -44,37 +45,50 @@ export default function Composer({ day, prompt, onSaved }: Props) {
         return;
       }
       setSaving(true);
-      const entry: Entry = {
-        day,
-        prompt,
-        kind: "text",
-        text: text.trim(),
-        createdAt: Date.now(),
-      };
-      await saveEntry(entry);
-      await tryBackup(entry);
-      onSaved(entry);
+      try {
+        const entry: Entry = {
+          day,
+          prompt,
+          kind: "text",
+          text: text.trim(),
+          createdAt: Date.now(),
+        };
+        await saveEntry(entry);
+        await tryBackup(entry);
+        onSaved(entry);
+      } catch (err) {
+        console.error("[composer] Failed to save text entry:", err);
+        setError("Something went wrong saving. Please try again.");
+        setSaving(false);
+      }
       return;
     }
+
     if (mode === "photo") {
       if (!photo) {
         setError("Pick a photo.");
         return;
       }
       setSaving(true);
-      // Compress before storing — phone photos go from ~5 MB → ~200 KB
-      const blob = await compressPhoto(photo);
-      const entry: Entry = {
-        day,
-        prompt,
-        kind: "photo",
-        photo: blob,
-        caption: caption.trim() || undefined,
-        createdAt: Date.now(),
-      };
-      await saveEntry(entry);
-      await tryBackup(entry);
-      onSaved(entry);
+      try {
+        // Compress before storing — phone photos go from ~5 MB → ~200 KB
+        const blob = await compressPhoto(photo);
+        const entry: Entry = {
+          day,
+          prompt,
+          kind: "photo",
+          photo: blob,
+          caption: caption.trim() || undefined,
+          createdAt: Date.now(),
+        };
+        await saveEntry(entry);
+        await tryBackup(entry);
+        onSaved(entry);
+      } catch (err) {
+        console.error("[composer] Failed to save photo entry:", err);
+        setError("Couldn't process the photo. Please try again.");
+        setSaving(false);
+      }
     }
   }
 

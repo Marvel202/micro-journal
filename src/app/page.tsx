@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { dayKey, promptForDate } from "../lib/prompts";
-import { getEntry, listEntries, type Entry } from "../lib/storage";
+import { getEntry, listEntries, saveEntry, type Entry } from "../lib/storage";
+import { loadToken, downloadMissingEntries } from "../lib/gdrive";
 import { computeStreak } from "../lib/streak";
 import Composer from "../components/Composer";
 import EntryCard from "../components/EntryCard";
@@ -22,12 +23,22 @@ export default function Home() {
   const [loaded, setLoaded] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
+  /** Re-read IndexedDB and update all entries state. */
+  const refreshEntries = useCallback(async (day: string) => {
+    const e = await getEntry(day);
+    setTodays(e ?? null);
+    const all = await listEntries();
+    setHistory(all);
+  }, []);
+
   useEffect(() => {
     const now = new Date();
     const k = dayKey(now);
     setToday(k);
     setPrompt(promptForDate(now));
+
     (async () => {
+      // 1. Load local IndexedDB immediately — fast, shows the app right away
       try {
         const e = await getEntry(k);
         setTodays(e ?? null);
@@ -38,8 +49,29 @@ export default function Home() {
       } finally {
         setLoaded(true);
       }
+
+      // 2. If a Drive token exists, pull any entries missing locally (background)
+      //    This is what makes the iPhone see MacBook's entries on first load.
+      const token = loadToken();
+      if (token) {
+        try {
+          const all = await listEntries();
+          const localDays = new Set(all.map((e) => e.day));
+          const newEntries = await downloadMissingEntries(token, localDays);
+          if (newEntries.length > 0) {
+            for (const entry of newEntries) {
+              await saveEntry(entry);
+            }
+            console.log("[page] Merged", newEntries.length, "entries from Drive");
+            await refreshEntries(k);
+          }
+        } catch (err) {
+          // Non-fatal — local data is already shown
+          console.warn("[page] Background Drive pull failed:", err);
+        }
+      }
     })();
-  }, []);
+  }, [refreshEntries]);
 
   const streak = computeStreak(history.map((e) => e.day), today);
 
@@ -53,8 +85,9 @@ export default function Home() {
           <Link href="/streak" className="pol-chip">
             🔥 {streak}-day
           </Link>
-          <DriveSyncButton />
+          <DriveSyncButton onRefreshNeeded={() => refreshEntries(today)} />
           <button
+            type="button"
             onClick={() => setShowHistory((s) => !s)}
             className="pol-chip"
           >
@@ -89,7 +122,7 @@ export default function Home() {
       )}
 
       <footer className="mt-auto pt-8 text-center pol-hand text-[color:var(--sage)] text-base">
-        {"● one sentence or one photo. that’s the day."}
+        {"● one sentence or one photo. that's the day."}
       </footer>
     </main>
   );

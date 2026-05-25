@@ -67,6 +67,96 @@ export function clearToken(): void {
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
+ * Download entries from Drive that are missing locally.
+ * skipDays — days already in local IndexedDB (won't be re-downloaded).
+ * Returns the downloaded Entry objects ready to be saved to IndexedDB.
+ */
+export async function downloadMissingEntries(
+  token: string,
+  skipDays: Set<string> = new Set(),
+): Promise<Entry[]> {
+  console.log("[gdrive] Pulling from Drive, skipping", skipDays.size, "local entries");
+  const folderId = await ensureFolder(token);
+
+  // List all .json files in the folder (up to 1000 — plenty for a daily journal)
+  const q = `'${folderId}' in parents and name contains '.json' and trashed=false`;
+  const listRes = await gdriveGet(
+    token,
+    `files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=1000`,
+  );
+  const { files: jsonFiles } = (await listRes.json()) as {
+    files: { id: string; name: string }[];
+  };
+
+  // Only download entries we don't already have locally
+  const toFetch = jsonFiles.filter((f) => {
+    const day = f.name.replace(".json", "");
+    return !skipDays.has(day);
+  });
+
+  console.log("[gdrive] Need to fetch", toFetch.length, "entries from Drive");
+
+  /** Download a single entry (JSON + optional photo). Returns null on failure. */
+  async function fetchEntry(file: { id: string; name: string }): Promise<Entry | null> {
+    try {
+      const jsonRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!jsonRes.ok) return null;
+
+      const data = (await jsonRes.json()) as Omit<Entry, "photo">;
+      const entry: Entry = { ...data };
+
+      // For photo entries, also fetch the .jpg blob
+      if (entry.kind === "photo") {
+        const jpgName = file.name.replace(".json", ".jpg");
+        const jpgQ = `name='${jpgName}' and '${folderId}' in parents and trashed=false`;
+        const jpgList = await gdriveGet(
+          token,
+          `files?q=${encodeURIComponent(jpgQ)}&fields=files(id)`,
+        );
+        const { files: jpgFiles } = (await jpgList.json()) as {
+          files: { id: string }[];
+        };
+        if (jpgFiles.length > 0) {
+          const photoRes = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${jpgFiles[0].id}?alt=media`,
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+          if (photoRes.ok) {
+            entry.photo = await photoRes.blob();
+          }
+        }
+      }
+
+      return entry;
+    } catch (err) {
+      console.error("[gdrive] Failed to download entry", file.name, err);
+      // Continue — one bad file shouldn't stop the rest
+      return null;
+    }
+  }
+
+  // Run downloads with a concurrency limit of 5 to balance speed vs. rate limits.
+  // Sequential (1 at a time) is too slow for a 300-day backlog.
+  // Unlimited parallel would risk Drive API rate limits.
+  const CONCURRENCY = 5;
+  const results: Entry[] = [];
+
+  for (let i = 0; i < toFetch.length; i += CONCURRENCY) {
+    const batch = toFetch.slice(i, i + CONCURRENCY);
+    const settled = await Promise.all(batch.map(fetchEntry));
+    for (const entry of settled) {
+      if (entry) results.push(entry);
+    }
+  }
+
+  console.log("[gdrive] Pull complete:", results.length, "new entries");
+  return results;
+}
+
+/**
  * Upload one journal entry to Drive (best-effort).
  * Creates the micro-journal folder on first use.
  */
