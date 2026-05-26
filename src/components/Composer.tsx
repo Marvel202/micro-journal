@@ -86,8 +86,7 @@ export default function Composer({ day, prompt, onSaved }: Props) {
         onSaved(entry);
       } catch (err) {
         console.error("[composer] Failed to save photo entry:", err);
-        // Give the user a slightly more actionable message while we have good logs in the browser console
-        setError("Couldn't process the photo (common on iPhone camera). Please try again or use the text option.");
+        setError("Couldn't save the photo. Please try taking the photo again, or use the text option instead.");
         setSaving(false);
       }
     }

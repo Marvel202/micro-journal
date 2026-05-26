@@ -1,20 +1,19 @@
 /**
  * Compress an image File before storing it (especially important for iPhone camera photos).
  *
- * Strategy:
- * 1. Try the fast `createImageBitmap` path first (good performance + orientation handling when it works).
- * 2. If that fails (very common with HEIC from iOS camera in certain Safari versions),
- *    fall back to the classic `<img>` + canvas path, which is more reliable on real-world iOS devices.
+ * Strategy (in order):
+ * 1. Try fast `createImageBitmap` path
+ * 2. Fall back to classic `<img>` + canvas (much better compatibility with iOS camera HEIC)
+ * 3. Last resort: use the original file unchanged (guarantees the user can always save)
  *
- * Target: longest edge ≤ 1200px, JPEG quality ~0.82
- * Typical phone photo: 4–8 MB → 150–300 KB
+ * Target: longest edge ≤ 1200px, JPEG quality ~0.82 when compression succeeds.
  */
 export async function compressPhoto(
   file: File,
   maxPx = 1200,
   quality = 0.82,
 ): Promise<Blob> {
-  // Fast path — preferred when the browser can handle the file (most cases)
+  // Fast path — preferred when the browser can handle the file
   try {
     const bitmap = await createImageBitmap(file);
     try {
@@ -23,14 +22,24 @@ export async function compressPhoto(
       return blob;
     } catch (err) {
       bitmap.close();
-      throw err; // will be caught by outer catch and trigger fallback
+      throw err;
     }
   } catch (err) {
-    console.warn("[compressPhoto] createImageBitmap failed (common on iOS HEIC camera files), falling back to <img> path:", err);
-
-    // Fallback path — much more reliable for photos taken directly with iPhone camera
-    return compressViaImageElement(file, maxPx, quality);
+    console.warn("[compressPhoto] createImageBitmap failed, trying <img> fallback:", err);
   }
+
+  // Second path — classic <img> + canvas (more compatible with many iOS HEIC camera shots)
+  try {
+    return await compressViaImageElement(file, maxPx, quality);
+  } catch (err) {
+    console.warn("[compressPhoto] <img> fallback also failed:", err);
+  }
+
+  // Last resort: use the original file as-is.
+  // This guarantees the user can save the photo even if both compression methods fail
+  // (common with certain iPhone HEIC files). File size will be larger than ideal.
+  console.warn("[compressPhoto] Both compression attempts failed. Using original file without compression.");
+  return file; // File extends Blob, so this is safe
 }
 
 /** Draw ImageBitmap to canvas and export as JPEG Blob */
