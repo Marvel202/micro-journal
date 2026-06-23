@@ -15,6 +15,7 @@
  */
 
 import type { Entry } from "./storage";
+import { serializeEntry } from "./entry-schema";
 
 const DB_NAME = "micro-journal-meta";
 const STORE   = "handles";
@@ -71,15 +72,7 @@ export async function backupEntry(
   entry: Entry,
 ): Promise<void> {
   // JSON sidecar (text + metadata, no Blob)
-  const record: Omit<Entry, "photo"> & { photo?: undefined } = {
-    day:       entry.day,
-    prompt:    entry.prompt,
-    kind:      entry.kind,
-    text:      entry.text,
-    caption:   entry.caption,
-    createdAt: entry.createdAt,
-  };
-  await writeFile(dir, `${entry.day}.json`, JSON.stringify(record, null, 2));
+  await writeFile(dir, `${entry.day}.json`, JSON.stringify(serializeEntry(entry), null, 2));
 
   // Photo file
   if (entry.photo) {

@@ -1,29 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
-import { dayKey } from "../../lib/prompts";
-import { listEntries, type Entry } from "../../lib/storage";
+import dynamic from "next/dynamic";
 import { computeStreak, recentMonths, type DayCell, type MonthGrid } from "../../lib/streak";
+import { useJournalEntries } from "../../hooks/useJournalEntries";
+import type { SyncState } from "../../lib/journal-sync";
+
+const DriveSyncButton = dynamic(() => import("../../components/DriveSyncButton"), {
+  ssr: false,
+});
 
 export default function StreakPage() {
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [today, setToday] = useState<string>("");
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    setToday(dayKey(new Date()));
-    (async () => {
-      try {
-        const all = await listEntries();
-        setEntries(all);
-      } catch (err) {
-        console.error("Failed to load entries from IndexedDB:", err);
-      } finally {
-        setLoaded(true);
-      }
-    })();
-  }, []);
+  const journal = useJournalEntries();
+  const entries = journal.entries;
+  const today = journal.today;
 
   const streak = useMemo(
     () => computeStreak(entries.map((e) => e.day), today),
@@ -48,8 +39,13 @@ export default function StreakPage() {
         <Link href="/" className="pol-hand pol-brand text-2xl text-ink no-underline">
           micro-journal
         </Link>
-        <Link href="/" className="pol-chip">today</Link>
+        <nav className="flex items-baseline gap-2">
+          <DriveSyncButton syncState={journal.syncState} onSyncRequested={journal.syncWithDrive} />
+          <Link href="/" className="pol-chip">today</Link>
+        </nav>
       </header>
+
+      <SyncNotice syncState={journal.syncState} onSync={journal.syncWithDrive} />
 
       <section className="flex flex-col gap-1">
         <p className="pol-eyebrow">your year</p>
@@ -72,7 +68,7 @@ export default function StreakPage() {
         <Stat label="longest" value={totals.longest} />
       </section>
 
-      {!loaded ? (
+      {!journal.loaded ? (
         <p className="pol-hand text-[color:var(--sage)] text-lg">loading…</p>
       ) : (
         <section className="flex flex-col gap-7">
@@ -199,4 +195,14 @@ function longestStreak(entryDays: string[]): number {
     }
   }
   return best;
+}
+
+function SyncNotice({ syncState, onSync }: { syncState: SyncState; onSync: () => Promise<void> }) {
+  if (syncState.status === "idle" || syncState.status === "synced" || syncState.status === "syncing") return null;
+  return (
+    <section className="pol-card p-3 text-sm text-ink flex items-center justify-between gap-3">
+      <p className="pol-serif text-[color:var(--sage)] leading-snug">{syncState.message}</p>
+      <button type="button" className="pol-chip shrink-0" onClick={() => void onSync()}>retry</button>
+    </section>
+  );
 }

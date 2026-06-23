@@ -3,15 +3,15 @@
  *
  * Uses Google Identity Services (GIS) Token Client directly from the browser.
  * Scope: drive.file — the app can only access files/folders it creates.
- *
- * Target folder layout:
- *   My Drive/
- *     micro-journal/
- *       2026-05-24.json
- *       2026-05-24.jpg   (if photo entry)
  */
 
 import type { Entry } from "./storage";
+import {
+  hydratePersistedEntry,
+  parsePersistedEntry,
+  serializeEntry,
+  type PersistedEntry,
+} from "./entry-schema";
 
 const FOLDER_NAME = "micro-journal";
 const MIME_FOLDER = "application/vnd.google-apps.folder";
@@ -43,10 +43,7 @@ export function loadToken(): string | null {
   const expiry = Number(localStorage.getItem(TOKEN_EXPIRY_KEY) || "0");
   const remainingMs = expiry - Date.now();
 
-  if (!token) {
-    console.log("[gdrive] No token in localStorage");
-    return null;
-  }
+  if (!token) return null;
 
   if (Date.now() >= expiry - 60_000) {
     console.log("[gdrive] Token expired or about to expire. Remaining ms:", remainingMs);
@@ -54,7 +51,6 @@ export function loadToken(): string | null {
     return null;
   }
 
-  console.log("[gdrive] Valid token found, seconds remaining:", Math.round(remainingMs / 1000));
   return token;
 }
 
@@ -69,7 +65,7 @@ export function clearToken(): void {
 /**
  * Download entries from Drive that are missing locally.
  * skipDays — days already in local IndexedDB (won't be re-downloaded).
- * Returns the downloaded Entry objects ready to be saved to IndexedDB.
+ * Returns validated Entry objects ready to be saved to IndexedDB.
  */
 export async function downloadMissingEntries(
   token: string,
@@ -78,25 +74,20 @@ export async function downloadMissingEntries(
   console.log("[gdrive] Pulling from Drive, skipping", skipDays.size, "local entries");
   const folderId = await ensureFolder(token);
 
-  // List all .json files in the folder (up to 1000 — plenty for a daily journal)
   const q = `'${folderId}' in parents and name contains '.json' and trashed=false`;
   const listRes = await gdriveGet(
     token,
     `files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=1000`,
   );
-  const { files: jsonFiles } = (await listRes.json()) as {
-    files: { id: string; name: string }[];
+  const { files: jsonFiles = [] } = (await listRes.json()) as {
+    files?: { id: string; name: string }[];
   };
 
-  // Only download entries we don't already have locally
   const toFetch = jsonFiles.filter((f) => {
-    const day = f.name.replace(".json", "");
-    return !skipDays.has(day);
+    const day = f.name.replace(/\.json$/i, "");
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) && !skipDays.has(day);
   });
 
-  console.log("[gdrive] Need to fetch", toFetch.length, "entries from Drive");
-
-  /** Download a single entry (JSON + optional photo). Returns null on failure. */
   async function fetchEntry(file: { id: string; name: string }): Promise<Entry | null> {
     try {
       const jsonRes = await fetch(
@@ -105,42 +96,39 @@ export async function downloadMissingEntries(
       );
       if (!jsonRes.ok) return null;
 
-      const data = (await jsonRes.json()) as Omit<Entry, "photo">;
-      const entry: Entry = { ...data };
+      const persisted = parsePersistedEntry(await jsonRes.json()) as PersistedEntry;
 
-      // For photo entries, also fetch the .jpg blob
-      if (entry.kind === "photo") {
-        const jpgName = file.name.replace(".json", ".jpg");
-        const jpgQ = `name='${jpgName}' and '${folderId}' in parents and trashed=false`;
-        const jpgList = await gdriveGet(
-          token,
-          `files?q=${encodeURIComponent(jpgQ)}&fields=files(id)`,
-        );
-        const { files: jpgFiles } = (await jpgList.json()) as {
-          files: { id: string }[];
-        };
-        if (jpgFiles.length > 0) {
-          const photoRes = await fetch(
-            `https://www.googleapis.com/drive/v3/files/${jpgFiles[0].id}?alt=media`,
-            { headers: { Authorization: `Bearer ${token}` } },
-          );
-          if (photoRes.ok) {
-            entry.photo = await photoRes.blob();
-          }
-        }
+      if (persisted.kind === "text") {
+        return hydratePersistedEntry(persisted);
       }
 
-      return entry;
+      const jpgName = file.name.replace(/\.json$/i, ".jpg");
+      const jpgQ = `name='${escapeDriveString(jpgName)}' and '${folderId}' in parents and trashed=false`;
+      const jpgList = await gdriveGet(
+        token,
+        `files?q=${encodeURIComponent(jpgQ)}&fields=files(id)&pageSize=1`,
+      );
+      const { files: jpgFiles = [] } = (await jpgList.json()) as {
+        files?: { id: string }[];
+      };
+      if (jpgFiles.length === 0) {
+        console.warn("[gdrive] Skipping photo entry with missing image file", persisted.day);
+        return null;
+      }
+
+      const photoRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${jpgFiles[0].id}?alt=media`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!photoRes.ok) return null;
+
+      return hydratePersistedEntry(persisted, await photoRes.blob());
     } catch (err) {
       console.error("[gdrive] Failed to download entry", file.name, err);
-      // Continue — one bad file shouldn't stop the rest
       return null;
     }
   }
 
-  // Run downloads with a concurrency limit of 5 to balance speed vs. rate limits.
-  // Sequential (1 at a time) is too slow for a 300-day backlog.
-  // Unlimited parallel would risk Drive API rate limits.
   const CONCURRENCY = 5;
   const results: Entry[] = [];
 
@@ -157,30 +145,16 @@ export async function downloadMissingEntries(
 }
 
 /**
- * Upload one journal entry to Drive (best-effort).
+ * Upload one journal entry to Drive (best-effort at the caller level).
  * Creates the micro-journal folder on first use.
  */
 export async function uploadEntry(token: string, entry: Entry): Promise<void> {
-  console.log("[gdrive] Starting upload for", entry.day);
   const folderId = await ensureFolder(token);
-
-  // JSON metadata (no Blob inside)
-  const json = JSON.stringify(
-    {
-      day: entry.day,
-      prompt: entry.prompt,
-      kind: entry.kind,
-      text: entry.text,
-      caption: entry.caption,
-      createdAt: entry.createdAt,
-    },
-    null,
-    2,
-  );
+  const json = JSON.stringify(serializeEntry(entry), null, 2);
 
   await upsertFile(token, `${entry.day}.json`, MIME_JSON, new Blob([json], { type: MIME_JSON }), folderId);
 
-  if (entry.photo) {
+  if (entry.kind === "photo") {
     await upsertFile(token, `${entry.day}.jpg`, MIME_JPEG, entry.photo, folderId);
   }
 }
@@ -190,23 +164,20 @@ export async function uploadEntry(token: string, entry: Entry): Promise<void> {
 async function ensureFolder(token: string): Promise<string> {
   if (cachedFolderId) return cachedFolderId;
 
-  const q = `name='${FOLDER_NAME}' and mimeType='${MIME_FOLDER}' and trashed=false`;
-  const res = await gdriveGet(token, `files?q=${encodeURIComponent(q)}&fields=files(id)`);
-  const { files } = (await res.json()) as { files: { id: string }[] };
+  const q = `name='${escapeDriveString(FOLDER_NAME)}' and mimeType='${MIME_FOLDER}' and trashed=false`;
+  const res = await gdriveGet(token, `files?q=${encodeURIComponent(q)}&fields=files(id)&pageSize=1`);
+  const { files = [] } = (await res.json()) as { files?: { id: string }[] };
 
   if (files.length > 0) {
-    console.log("[gdrive] Found existing micro-journal folder", files[0].id);
     cachedFolderId = files[0].id;
     return cachedFolderId;
   }
 
-  // Create folder
   const created = await gdrivePost(token, "files", {
     name: FOLDER_NAME,
     mimeType: MIME_FOLDER,
   });
   const folder = (await created.json()) as { id: string };
-  console.log("[gdrive] Created new micro-journal folder", folder.id);
   cachedFolderId = folder.id;
   return cachedFolderId;
 }
@@ -218,9 +189,9 @@ async function upsertFile(
   content: Blob,
   parentId: string,
 ): Promise<void> {
-  const q = `name='${name}' and '${parentId}' in parents and trashed=false`;
-  const res = await gdriveGet(token, `files?q=${encodeURIComponent(q)}&fields=files(id)`);
-  const { files } = (await res.json()) as { files: { id: string }[] };
+  const q = `name='${escapeDriveString(name)}' and '${parentId}' in parents and trashed=false`;
+  const res = await gdriveGet(token, `files?q=${encodeURIComponent(q)}&fields=files(id)&pageSize=1`);
+  const { files = [] } = (await res.json()) as { files?: { id: string }[] };
 
   const metadata = files.length > 0
     ? { name }
@@ -247,8 +218,6 @@ async function upsertFile(
     console.error("[gdrive] Upload failed", uploadRes.status, text, { name, parentId });
     throw new Error(`Drive upload ${uploadRes.status}: ${text}`);
   }
-
-  console.log("[gdrive] Successfully uploaded", name);
 }
 
 async function gdriveGet(token: string, path: string): Promise<Response> {
@@ -278,4 +247,8 @@ async function gdrivePost(token: string, path: string, body: object): Promise<Re
     throw new Error(`Drive POST ${res.status}: ${text}`);
   }
   return res;
+}
+
+function escapeDriveString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }

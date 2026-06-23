@@ -17,6 +17,8 @@ export default function EntryCard({ entry, big = false, stamped = false, tilt = 
   useEffect(() => {
     if (entry.kind !== "photo" || !entry.photo) return;
     const u = URL.createObjectURL(entry.photo);
+    // Object URL state mirrors an external browser resource lifecycle.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUrl(u);
     return () => URL.revokeObjectURL(u);
   }, [entry]);

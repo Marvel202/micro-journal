@@ -2,7 +2,7 @@
 
 One sentence or one photo. That's the day.
 
-A minimal daily journaling PWA — no account required, no cloud dependency. Entries live in your browser's IndexedDB. Google Drive backup is optional and scope-limited to files the app creates.
+A minimal daily journaling PWA — no account required, no cloud dependency. Entries live in your browser's IndexedDB. Google Drive sync/restore is optional and scope-limited to files the app creates.
 
 ---
 
@@ -14,7 +14,7 @@ A minimal daily journaling PWA — no account required, no cloud dependency. Ent
 | UI | React 19, Tailwind CSS |
 | Fonts | Caveat (handwritten), Lora (serif) |
 | Storage | IndexedDB (via native API) |
-| Drive backup | Google Identity Services + Drive API v3 |
+| Sync/restore | Google Identity Services + Drive API v3 |
 | Validation | Zod |
 
 No backend. No database. No auth server.
@@ -39,7 +39,7 @@ Open [http://localhost:3000](http://localhost:3000).
 - **Entry stack** — browse every past card
 - **Image compression** — phone photos compressed before storage (~5 MB → ~200 KB)
 - **PWA** — installable on iPhone/Android via "Add to Home Screen"
-- **Google Drive backup** — optional, backs up all entries on connect and on every new save
+- **Google Drive sync/restore** — optional, restores missing entries on load/resume and backs up saves in the background
 
 ---
 
@@ -67,9 +67,9 @@ src/
 
 ---
 
-## Google Drive Backup (optional)
+## Google Drive Sync / Restore (optional)
 
-Backs up every entry to `My Drive/micro-journal/` as:
+Syncs entries through `My Drive/micro-journal/` as:
 - `YYYY-MM-DD.json` — text, prompt, metadata
 - `YYYY-MM-DD.jpg` — compressed photo (photo entries only)
 
@@ -93,7 +93,7 @@ Under **Authorized JavaScript origins** add every origin you'll run from:
 | LAN (iPhone testing) | `http://192.168.x.x:3000` |
 | Production | `https://your-app.vercel.app` |
 
-> **Tip:** Deploy to Vercel to get a permanent HTTPS origin — no more IP changes when your router reassigns your Mac's address.
+> **Tip:** Deploy to Vercel to get a permanent HTTPS origin — no more IP changes when your router reassigns your Mac's address. This matters because IndexedDB is origin-scoped; changing from one LAN IP/origin to another creates a separate local journal cache.
 
 **3. Add the client ID to `.env`**
 
@@ -109,14 +109,16 @@ Click **☁︎ backup** in the header → sign in with Google → all existing e
 
 | Action | What happens |
 |---|---|
-| Click **☁︎ backup** (not connected) | OAuth → token saved → all entries uploaded |
-| Click **☁︎ synced** (connected) | Re-uploads all entries (safe to repeat — upsert) |
-| Save a new entry | Entry uploaded in the background |
-| Token expires (~1 hour) | Button reverts to **☁︎ backup** — just click to reconnect |
+| Open/resume the app with a valid token | Loads local IndexedDB, pulls missing Drive entries, then pushes merged local entries |
+| Open `/streak` directly | Uses the same load/sync flow before computing streak state |
+| Click **☁︎ backup** (not connected) | OAuth → token saved → missing entries restored → merged entries uploaded |
+| Click **☁︎ synced** (connected) | Runs the same bidirectional sync again |
+| Save a new entry | Local IndexedDB save completes first; Drive upload continues in the background |
+| Token expires (~1 hour) | A visible disconnected/reconnect state is shown; tap **☁︎ backup** to reconnect |
 
 ### Notes
 
-- Backup is best-effort and never blocks saving locally — your entry is always written to IndexedDB first.
+- Sync is best-effort and never blocks saving locally — your entry is always written to IndexedDB first.
 - No refresh tokens are stored. Short-lived access tokens only.
 - To disconnect: DevTools → Application → Local Storage → delete `gdrive-access-token` and `gdrive-token-expiry`.
 
