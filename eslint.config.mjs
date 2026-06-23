@@ -5,13 +5,22 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  // Override default ignores of eslint-config-next.
   globalIgnores([
-    // Default ignores of eslint-config-next:
+    // Build/output/dependency folders
     ".next/**",
     "out/**",
     "build/**",
+    "node_modules/**",
     "next-env.d.ts",
+
+    // Local planning/prototype material — keep checks scoped to this app.
+    "phase-3-verify/**",
+    "plans/**",
+
+    // Dev-only verification harness. It is useful locally, but it should not
+    // block production app lint integrity.
+    "src/verify/**",
+    "src/app/_verify/**",
   ]),
 ]);
 

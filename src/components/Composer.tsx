@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { validateSentence } from "../lib/validate";
-import { saveEntry, type Entry } from "../lib/storage";
+import { createEntry, type Entry } from "../lib/storage";
 import { compressPhoto } from "../lib/compress";
-import { loadToken, uploadEntry as driveUpload } from "../lib/gdrive";
 import { verifyAttrs } from "../verify/core/contract";
 
 type Props = {
@@ -27,6 +26,8 @@ export default function Composer({ day, prompt, onSaved }: Props) {
 
   useEffect(() => {
     if (!photo) {
+      // Object URL state mirrors an external browser resource lifecycle.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPhotoUrl(null);
       return;
     }
@@ -53,12 +54,13 @@ export default function Composer({ day, prompt, onSaved }: Props) {
           text: text.trim(),
           createdAt: Date.now(),
         };
-        await saveEntry(entry);
-        await tryBackup(entry);
+        await createEntry(entry);
         onSaved(entry);
       } catch (err) {
         console.error("[composer] Failed to save text entry:", err);
-        setError("Something went wrong saving. Please try again.");
+        setError(err instanceof DOMException && err.name === "ConstraintError"
+          ? "Today is already locked on this device. Refreshing should show the saved card."
+          : "Something went wrong saving. Please try again.");
         setSaving(false);
       }
       return;
@@ -81,28 +83,15 @@ export default function Composer({ day, prompt, onSaved }: Props) {
           caption: caption.trim() || undefined,
           createdAt: Date.now(),
         };
-        await saveEntry(entry);
-        await tryBackup(entry);
+        await createEntry(entry);
         onSaved(entry);
       } catch (err) {
         console.error("[composer] Failed to save photo entry:", err);
-        setError("Couldn't save the photo. Please try taking the photo again, or use the text option instead.");
+        setError(err instanceof DOMException && err.name === "ConstraintError"
+          ? "Today is already locked on this device. Refreshing should show the saved card."
+          : "Couldn't save the photo. Please try taking the photo again, or use the text option instead.");
         setSaving(false);
       }
-    }
-  }
-
-  /** Best-effort backup to Google Drive (if user has connected). Never blocks saving. */
-  async function tryBackup(entry: Entry): Promise<void> {
-    try {
-      const token = loadToken();
-      if (token) {
-        await driveUpload(token, entry);
-      } else {
-        console.log("[gdrive] No valid token, skipping backup");
-      }
-    } catch (err) {
-      console.error("[gdrive] Backup failed for", entry.day, err);
     }
   }
 
